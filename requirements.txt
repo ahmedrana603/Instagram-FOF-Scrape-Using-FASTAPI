@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+selenium
+gspread
+oauth2client
+pydantic

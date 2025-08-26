@@ -1,0 +1,26 @@
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environment folders
+venv/
+env/
+.venv/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Google credentials (⚠️ important)
+service_account.json
+
+# Selenium / Chrome driver logs
+chromedriver.log
+geckodriver.log
+
+# OS specific
+.DS_Store
+Thumbs.db
