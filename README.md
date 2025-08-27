@@ -1,27 +1,31 @@
-# 📸 Instagram Followers Scraper (FastAPI + Selenium + Google Sheets)
+# Facebook Friends Scraper with Google Sheets Integration
 
-Automate Instagram followers & followers-of-followers scraping using **FastAPI**, **Selenium**, and **Google Sheets** integration.  
-Easily fetch followers data with just an Instagram **session ID** and store everything directly in Google Sheets.  
+This Python script logs into Facebook using Selenium, scrapes your own friends list and their friends (friends-of-friends), and stores the data in a Google Sheet.
 
----
+## 🚀 Features
 
-## ✨ Features
-- 🔑 **Session ID Authentication** → No username/password required.  
-- 🌐 **FastAPI Endpoint** → Start scraping with a simple POST request.  
-- 🤖 **Selenium Automation** → Handles login, scrolling, and data extraction.  
-- 📊 **Google Sheets Integration** → Data is saved live into Google Sheets.  
-- ⚡ **Background Threading** → API responds instantly, scraping continues in background.  
-- 📝 Extracted Data Includes:  
-  - Follower username  
-  - Number of followers  
-  - Followers of each follower  
+- Logs into Facebook automatically
+- Scrapes your friend list and their friend counts
+- Extracts names of friends-of-friends
+- Saves the data to Google Sheets in real-time
 
----
+## ⚠️ Disclaimer
 
-## 🛠️ Tech Stack
-- **[FastAPI](https://fastapi.tiangolo.com/)** → API framework  
-- **[Selenium](https://www.selenium.dev/)** → Web automation & scraping  
-- **[Google Sheets API (gspread)](https://docs.gspread.org/)** → Save scraped data  
-- **[Threading](https://docs.python.org/3/library/threading.html)** → Background execution  
+- This script automates Facebook, which may violate [Facebook's Terms of Service](https://www.facebook.com/legal/terms). Use at your own risk.
+- It is intended for **educational purposes only**.
+- Do not use this for spamming or unethical data harvesting.
 
+## 📦 Requirements
 
+- Python 3.7+
+- Chrome browser
+- ChromeDriver (compatible with your Chrome version)
+- A Google Service Account JSON credentials file
+- A Google Sheet (shared with the service account email)
+
+## 🔧 Setup
+
+1. **Install dependencies**
+
+```bash
+pip install -r requirements.txt

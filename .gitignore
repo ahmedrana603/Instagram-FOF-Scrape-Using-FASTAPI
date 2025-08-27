@@ -1,26 +1,18 @@
-# Python cache files
+
+```gitignore
+# Python cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.log
+*.py[cod]
 
-# Virtual environment folders
-venv/
-env/
-.venv/
+# Environment files
+.env
+*.env
 
-# IDE settings
-.vscode/
-.idea/
+# Credentials
+*.json
+credentials.json
+client_secret.json
 
-# Google credentials (⚠️ important)
-service_account.json
-
-# Selenium / Chrome driver logs
-chromedriver.log
-geckodriver.log
-
-# OS specific
+# OS-specific
 .DS_Store
 Thumbs.db

@@ -1,176 +1,138 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from urllib.parse import urlparse
+from selenium.webdriver.chrome.options import Options
 import time
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import threading
 
-app = FastAPI()
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name(
+    r"C:\Users\ahmed\Downloads\YOUR JSON FILE", scope)
+client = gspread.authorize(creds)
+sheet = client.open("fb-sheet").sheet1
+sheet.clear()
 
-def setup_google_sheet():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+options = Options()
+driver = webdriver.Chrome(options=options)
+wait = WebDriverWait(driver, 20)
 
+driver.get("https://www.facebook.com/")
 
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "ENTER_YOUR_SERVICE_ACCOUNT_JSON_HERE.json", scope
-    )
+login_username = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Email address or phone number"]')))
+login_username.send_keys("ENTER YOUR ID")
 
-    client = gspread.authorize(creds)
+login_password = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Password"]')))
+login_password.send_keys("ENTER YOUR PASSWORD")
 
-    sheet = client.open("ENTER_YOUR_SHEET_NAME_HERE").sheet1
+login_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Log in")]')))
+login_button.click()
 
-    sheet.clear()
-    sheet.update(range_name="A1:C1", values=[["Follower ID", "No of followers", "Followers of followers"]])
-    return sheet
+time.sleep(20)  
 
-def extract_usernames_from_modal(driver, limit=None):
-    elements = driver.find_elements(By.XPATH, '//div[@role="dialog"]//a[contains(@href, "/") and not(contains(@href, "stories"))]')
-    usernames = []
-    for el in elements:
-        href = el.get_attribute("href")
-        if href and "instagram.com/" in href:
-            username = href.split("instagram.com/")[-1].split('/')[0]
-            if username and username not in usernames:
-                usernames.append(username)
-                if limit and len(usernames) >= limit:
-                    break
-    return usernames
+wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="navigation"]')))
+time.sleep(5)
 
-def get_followers_count(driver, wait):
-    try:
-        count_elem = wait.until(EC.presence_of_element_located((By.XPATH, '//a[contains(@href, "/followers")]/span')))
-        return count_elem.text
-    except:
-        return "0"
+friends_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Friends"]/ancestor::a[1]')))
+friends_button.click()
+time.sleep(5)
 
-def append_to_sheet(sheet, follower_id, followers_count, followers_str):
-    sheet.append_row([follower_id, followers_count, followers_str])
+all_friends_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="All friends"]/ancestor::a[1]')))
+all_friends_button.click()
+time.sleep(5)
 
-def scrape_instagram_followers(sessionid):
-    options = webdriver.ChromeOptions()
-    driver = webdriver.Chrome(options=options)
-    driver.get("https://www.instagram.com/")
-    wait = WebDriverWait(driver, 30)
+friends_count_elem = wait.until(EC.presence_of_element_located((By.XPATH, '//h2//span[contains(text(), "friend")]')))
+digits_only = ''.join(filter(str.isdigit, friends_count_elem.text.strip()))
+my_friends_count = int(digits_only) if digits_only else 0
+print(f" Total Friends: {my_friends_count}")
 
-    driver.add_cookie({
-        'name': 'sessionid',
-        'value': sessionid,
-        'domain': '.instagram.com',
-        'path': '/',
-        'secure': True,
-        'httpOnly': True,
-        'sameSite': 'Lax'
-    })
-    driver.refresh()
-    time.sleep(5)
+friend_name_spans = driver.find_elements(By.XPATH, '//span[contains(@class, "x193iq5w") and text()]')
+friend_names = [f.text.strip() for f in friend_name_spans if f.text.strip()]
+unique_friend_names = list(set(friend_names))
 
-    # Profile
-    profile_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Profile"]/ancestor::a[@role="link"]')))
-    driver.execute_script("arguments[0].click();", profile_btn)
-    time.sleep(5)
+if not unique_friend_names:
+    print(" No friends found.")
+    driver.quit()
+    exit()
 
-    # Followers
-    followers_link = wait.until(EC.element_to_be_clickable((By.XPATH, '//a[contains(@href, "/followers")]')))
-    followers_link.click()
-    time.sleep(5)
+def scroll_to_bottom():
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(3)
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
 
-    my_followers_count_str = get_followers_count(driver, wait)
-    try:
-        my_followers_count = int(''.join(filter(str.isdigit, my_followers_count_str)))
-    except:
-        my_followers_count = 0
+for idx, target_name in enumerate(unique_friend_names):
+    print(f"\n Processing friend {idx+1}/{len(unique_friend_names)}: {target_name}")
 
-    print(f"\nYou have {my_followers_count} followers")
-    all_follower_urls = []
-
-    followers_modal = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"]//div[contains(@class, "x6nl9eh")]')))
-
-    while len(all_follower_urls) < my_followers_count:
-        follower_links = driver.find_elements(By.XPATH, '//div[@role="dialog"]//a[contains(@href, "/") and not(contains(@href, "explore"))]')
-        for el in follower_links:
-            href = el.get_attribute("href")
-            if href and href not in all_follower_urls:
-                all_follower_urls.append(href)
-                if len(all_follower_urls) >= my_followers_count:
-                    break
-        driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", followers_modal)
-        time.sleep(2)
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(1)
 
     try:
-        close_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//button//*[name()="svg"][@aria-label="Close"]/ancestor::button')))
-        close_btn.click()
-        time.sleep(2)
-    except:
-        pass
+        friend_link = wait.until(EC.element_to_be_clickable((
+            By.XPATH, f'//a[.//span[normalize-space(text())="{target_name}"]]')))
+        driver.execute_script("arguments[0].scrollIntoView(true);", friend_link)
+        time.sleep(1)
+        friend_link.click()
+    except Exception as e:
+        print(f" Could not click friend {target_name}, skipping. Error: {e}")
+        continue
 
-    sheet = setup_google_sheet()
+    try:
+        temp_count_elem = wait.until(EC.presence_of_element_located((
+            By.XPATH, '//a[contains(@href, "sk=friends")]//strong[contains(@class, "x1vvkbs")]'
+        )))
+        temp_friends_count = temp_count_elem.text.strip()
+        print(f" {target_name} has {temp_friends_count} friends")
+    except Exception as e:
+        print(f" Could not get friend count for {target_name}: {e}")
+        temp_friends_count = "N/A"
 
-    for i, url in enumerate(all_follower_urls):
+    try:
+        friends_link = wait.until(EC.element_to_be_clickable((By.XPATH, '//a[contains(text(), "friends")]')))
+        friends_link.click()
+    except Exception as e:
+        print(f" Could not click friends link for {target_name}: {e}")
+
+    try:
+        wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="main"]')))
+        scroll_to_bottom()
+        print(" Scrolling done — all friends loaded.")
+    except Exception as e:
+        print(f" Error during scrolling for {target_name}: {e}")
+
+    friend_elements = driver.find_elements(By.XPATH, '//a[contains(@href, "facebook.com") and @role="link"]//span')
+    fof_names = []
+    for el in friend_elements:
         try:
-            print(f"\nVisiting follower {i+1}/{len(all_follower_urls)}: {url}")
-            driver.get(url)
-            time.sleep(5)
-
-            path_parts = urlparse(driver.current_url).path.strip('/').split('/')
-            follower_id = path_parts[0]
-
-            followers_count_str = get_followers_count(driver, wait)
-            try:
-                followers_count = int(''.join(filter(str.isdigit, followers_count_str)))
-            except:
-                followers_count = 0
-
-            print(f"{follower_id} has {followers_count} followers")
-
-            follower_followers_link = wait.until(EC.element_to_be_clickable((By.XPATH, '//a[contains(@href, "/followers")]')))
-            follower_followers_link.click()
-            time.sleep(3)
-
-            modal = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@role="dialog"]//div[contains(@class, "x6nl9eh")]')))
-            temp_usernames = []
-            previous_count = -1
-            max_scrolls = 30
-            scroll_attempts = 0
-
-            while len(temp_usernames) < followers_count and scroll_attempts < max_scrolls:
-                temp_usernames = extract_usernames_from_modal(driver, limit=followers_count)
-                print(f"Scroll {scroll_attempts + 1}: {len(temp_usernames)} / {followers_count}")
-
-                if len(temp_usernames) == previous_count:
-                    print("No new followers. Breaking.")
-                    break
-
-                previous_count = len(temp_usernames)
-                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", modal)
-                time.sleep(4)
-                scroll_attempts += 1
-
-            followers_str = ", ".join(temp_usernames)
-            append_to_sheet(sheet, follower_id, followers_count, followers_str)
-
-            try:
-                close_btn = wait.until(EC.element_to_be_clickable((By.XPATH, '//button//*[name()="svg"][@aria-label="Close"]/ancestor::button')))
-                close_btn.click()
-                time.sleep(2)
-            except:
-                pass
-
-        except Exception as e:
-            print(f"Error: {e}")
+            name = el.text.strip()
+            if name and len(name.split()) >= 2 and name not in fof_names:
+                fof_names.append(name)
+        except:
             continue
 
-    print("\nDone scraping all followers.")
-    driver.quit()
+    fof_combined = ",".join(fof_names)
 
-class SessionRequest(BaseModel):
-    sessionid: str
+    try:
+        sheet.append_row([target_name, temp_friends_count, fof_combined])
+        print(f" Saved friends-of-friends for {target_name} to sheet.")
+    except Exception as e:
+        print(f" Could not append to sheet for {target_name}: {e}")
 
-@app.post("/scrape/")
-async def start_scraping(request: SessionRequest):
-    threading.Thread(target=scrape_instagram_followers, args=(request.sessionid,)).start()
-    return {"status": "Scraping started"}
+    try:
+        friends_nav = wait.until(EC.element_to_be_clickable((By.XPATH, '//a[@href="/friends/"]')))
+        friends_nav.click()
+
+        wait.until(EC.presence_of_element_located((By.XPATH, '//span[text()="All friends"]')))
+        all_friends_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="All friends"]/ancestor::a[1]')))
+        all_friends_button.click()
+        time.sleep(5)
+    except Exception as e:
+        print(f" Could not navigate back to friends list after {target_name}: {e}")
+
+print("\n All done!")
+driver.quit()
